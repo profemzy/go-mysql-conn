@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gomysql-deployment
+spec:
+  selector:
+    matchLabels:
+      app: conn-demo-app
+  template:
+    metadata:
+      labels:
+        app: conn-demo-app
+    spec:
+      containers:
+        - name: conn-demo-app
+          image: profemzy/go-mysql-conn:v1
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "0.5"
+          env:
+            - name: DB_HOST
+              value: "127.0.0.1"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pg-conn-test
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-conn-test
+                  key: password
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: pg-conn-test
+                  key: database
+        - name: cloud-sql-proxy
+          image: gcr.io/cloudsql-docker/gce-proxy:1.17
+          command:
+            - "/cloud_sql_proxy"
+            - "-instances=sre-scratchpad:us-west1:staging-db-instance-342d34df=tcp:3306"
+
+            # This flag specifies where the service account key can be found
+            - "-credential_file=/secrets/service_account.json"
+          securityContext:
+            runAsNonRoot: true
+          volumeMounts:
+            - mountPath: /secrets/
+              name: profemzy-sa-volume
+              readOnly: true
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu:    "1"
+      volumes:
+        - name: profemzy-sa-volume
+          secret:
+            secretName: profemzy-sa-secret
